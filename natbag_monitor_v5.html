@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מוניטור נתב"ג</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#03050f;font-family:'Heebo',Arial,sans-serif;overflow:hidden;color:#fff;}
+
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:200;height:52px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:6px;
+  padding:0 16px;background:rgba(3,5,22,0.98);
+  border-bottom:1px solid rgba(100,160,255,0.18);direction:rtl;
+}
+.app-title{font-size:1rem;font-weight:900;color:#fff;white-space:nowrap;}
+.app-title span{color:#ff5533;}
+.app-sub{font-size:0.52rem;color:#4466aa;letter-spacing:2px;}
+.controls{display:flex;align-items:center;gap:7px;flex-wrap:nowrap;}
+.btn{background:rgba(80,140,255,0.12);border:1px solid rgba(80,160,255,0.35);color:#88ccff;
+  padding:5px 14px;border-radius:5px;cursor:pointer;
+  font-family:'Share Tech Mono',monospace;font-size:0.72rem;letter-spacing:1px;transition:all 0.2s;white-space:nowrap;}
+.btn:hover{background:rgba(80,140,255,0.25);color:#fff;}
+.btn.stop{border-color:rgba(255,80,60,0.5);color:#ff8866;background:rgba(255,60,40,0.1);}
+.sw{display:flex;align-items:center;gap:5px;font-size:0.68rem;color:#7799bb;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+.sw input{background:rgba(80,120,200,0.1);border:1px solid rgba(80,140,255,0.25);color:#ccddff;
+  width:48px;padding:3px 5px;border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;outline:none;text-align:center;}
+
+#statusbar{
+  position:fixed;top:52px;left:0;right:0;z-index:199;height:28px;
+  display:flex;align-items:center;justify-content:space-between;gap:5px;
+  padding:0 16px;background:rgba(3,5,18,0.96);
+  border-bottom:1px solid rgba(80,120,200,0.1);
+  font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:#446688;direction:rtl;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:#1a2030;display:inline-block;margin-left:4px;}
+.dot.on{background:#33ff88;box-shadow:0 0 10px #33ff88;animation:blk 2s infinite;}
+.dot.ld{background:#ffcc00;box-shadow:0 0 8px #ffcc00;animation:blk 0.4s infinite;}
+@keyframes blk{0%,100%{opacity:1}50%{opacity:0.12}}
+.sp{display:flex;align-items:center;gap:4px;color:#88aacc;}
+.sp em{color:#ffffff;font-style:normal;font-weight:700;}
+
+/* ── LAYOUT ── */
+#leftPanel{
+  position:fixed;left:0;top:80px;bottom:0;width:300px;z-index:50;
+  overflow-y:auto;padding:10px;
+  background:rgba(3,6,22,0.97);
+  border-right:1px solid rgba(60,100,200,0.15);direction:rtl;
+}
+#leftPanel::-webkit-scrollbar{width:3px;}
+#leftPanel::-webkit-scrollbar-thumb{background:#1a2840;}
+
+#earthWrap{
+  position:fixed;left:300px;right:260px;top:80px;bottom:0;
+  overflow:hidden;
+}
+#c{display:block;width:100%;height:100%;}
+
+#rightPanel{
+  position:fixed;right:0;top:80px;bottom:0;width:260px;z-index:50;
+  background:rgba(3,6,22,0.97);
+  border-left:1px solid rgba(60,100,200,0.15);direction:rtl;
+  overflow-y:auto;
+}
+
+/* ── PLANE LIST ── */
+.panel-title{
+  font-family:'Share Tech Mono',monospace;font-size:0.62rem;
+  color:#66aaff;letter-spacing:3px;margin-bottom:8px;
+  border-bottom:1px solid rgba(80,140,255,0.25);padding-bottom:5px;
+}
+.pl-row{
+  background:rgba(8,18,48,0.8);border:1px solid rgba(60,110,200,0.18);
+  border-radius:7px;padding:9px 11px;margin-bottom:6px;
+  transition:border-color 0.3s;animation:si 0.3s ease;
+}
+.pl-row:hover{border-color:rgba(80,160,255,0.3);}
+.pl-row.approach{border-color:rgba(40,200,255,0.5);background:rgba(0,90,180,0.1);}
+.pl-row.deviate{
+  border-color:rgba(255,80,50,0.65);background:rgba(180,25,8,0.12);
+  animation:si 0.3s ease,rp 1.1s ease-in-out infinite;
+}
+@keyframes rp{0%,100%{box-shadow:0 0 8px rgba(255,60,30,0.15)}50%{box-shadow:0 0 22px rgba(255,60,30,0.45)}}
+@keyframes si{from{opacity:0;transform:translateX(-5px)}to{opacity:1;transform:translateX(0)}}
+
+.pl-cs{font-size:0.95rem;color:#ffffff;letter-spacing:2px;font-family:'Share Tech Mono',monospace;font-weight:700;}
+.pl-airline{font-size:0.68rem;color:#99bbdd;margin-bottom:4px;}
+.pl-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+.pls{font-size:0.65rem;color:#7799bb;}
+.pls em{color:#ffffff;font-style:normal;font-weight:700;}
+
+.pl-badge{display:inline-block;font-size:0.62rem;padding:2px 9px;border-radius:10px;margin-bottom:3px;font-weight:700;}
+.pl-badge.deviate{background:rgba(255,55,30,0.22);border:1px solid rgba(255,80,50,0.6);color:#ff8866;}
+.pl-badge.approach{background:rgba(0,190,255,0.18);border:1px solid rgba(0,220,255,0.5);color:#55eeff;}
+.pl-badge.descend{background:rgba(255,165,0,0.14);border:1px solid rgba(255,185,0,0.45);color:#ffdd55;}
+.pl-badge.cruise{background:rgba(90,160,255,0.12);border:1px solid rgba(120,185,255,0.3);color:#aaccff;}
+.pl-badge.climb{background:rgba(50,220,110,0.12);border:1px solid rgba(60,230,120,0.35);color:#55ff99;}
+.pl-badge.ground{background:rgba(120,140,160,0.1);border:1px solid rgba(130,150,170,0.22);color:#aabbcc;}
+
+.dev-bar-wrap{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.dev-bar-bg{flex:1;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;}
+.dev-bar-fill{height:100%;border-radius:3px;transition:width 0.5s;}
+.dev-label{font-size:0.65rem;font-family:'Share Tech Mono',monospace;min-width:62px;text-align:left;font-weight:700;}
+
+/* ── RIGHT PANEL ── */
+.rp-sec{padding:10px 12px;border-bottom:1px solid rgba(60,100,200,0.1);}
+.rp-title{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#66aaff;letter-spacing:3px;margin-bottom:7px;}
+#miniMap{width:100%;border-radius:5px;border:1px solid rgba(60,110,200,0.2);background:#060d1a;display:block;}
+.lp-cond{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;margin-bottom:4px;background:rgba(8,18,48,0.7);border:1px solid rgba(60,110,200,0.15);font-size:0.68rem;}
+.lp-cond .ic{font-size:1rem;width:18px;text-align:center;}
+.lp-cond .lbl{flex:1;color:#ccddee;}
+.lp-cond .val{color:#ffffff;font-family:'Share Tech Mono',monospace;font-size:0.65rem;font-weight:700;}
+.lp-cond.ac{border-color:rgba(255,90,55,0.4);background:rgba(180,40,15,0.1);}
+.lp-cond.ac .lbl{color:#ffcc99;}
+.lp-cond.ac .val{color:#ffaa77;}
+#histCanvas{width:100%;border-radius:5px;border:1px solid rgba(60,110,200,0.15);display:block;}
+.log-item{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#6688aa;padding:3px 0;border-bottom:1px solid rgba(60,110,200,0.06);}
+.log-item.dev{color:#ff9977;}
+.log-item:last-child{border-bottom:none;}
+
+.err-bar{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(25,4,0,0.97);border:1px solid rgba(255,70,40,0.4);border-radius:6px;color:#ff9977;font-size:0.66rem;padding:7px 16px;z-index:300;display:none;font-family:'Share Tech Mono',monospace;direction:rtl;text-align:center;white-space:nowrap;}
+
+/* ══ ALERT ══ */
+#alertOverlay{display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,5,0.93);align-items:center;justify-content:center;}
+#alertOverlay.show{display:flex;}
+.alert-box{background:#060210;border:2px solid #ff3300;border-radius:18px;padding:26px 30px 22px;max-width:450px;width:92%;text-align:center;position:relative;overflow:hidden;direction:rtl;animation:popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);}
+.alert-box::before{content:'';position:absolute;inset:-2px;border-radius:18px;border:2px solid #ff3300;pointer-events:none;animation:bp 0.8s ease-in-out infinite;}
+@keyframes bp{0%,100%{box-shadow:0 0 20px #ff330030}50%{box-shadow:0 0 60px #ff3300,0 0 100px #ff330015}}
+@keyframes popIn{from{transform:scale(0.5);opacity:0}to{transform:scale(1);opacity:1}}
+.siren-row{display:flex;justify-content:center;gap:16px;margin-bottom:10px;}
+.siren{width:36px;height:36px;border-radius:50%;}
+.siren.a{background:#cc0000;animation:sb 0.45s alternate infinite;}
+.siren.b{background:#ff4400;animation:sb 0.45s alternate infinite;animation-delay:.22s;}
+@keyframes sb{from{opacity:1;box-shadow:0 0 20px #cc0000}to{opacity:.1;box-shadow:none}}
+.a-time-lbl{font-size:10px;color:#882200;letter-spacing:3px;font-family:'Share Tech Mono',monospace;margin-bottom:2px;text-transform:uppercase;}
+.a-time{font-size:52px;font-weight:900;color:#ff5533;letter-spacing:4px;line-height:1;margin-bottom:3px;font-variant-numeric:tabular-nums;text-shadow:0 0 28px rgba(255,80,40,0.4);}
+.a-date{font-size:11px;color:#662200;letter-spacing:1px;margin-bottom:12px;font-family:'Share Tech Mono',monospace;}
+.a-dev-badge{display:inline-block;background:rgba(255,55,15,0.18);border:1px solid rgba(255,75,35,0.5);color:#ff9966;font-size:13px;font-weight:700;padding:5px 18px;border-radius:18px;margin-bottom:12px;font-family:'Share Tech Mono',monospace;letter-spacing:2px;}
+.a-logo{width:64px;height:64px;border:1px solid rgba(255,75,35,0.2);border-radius:8px;background:#080010;display:flex;align-items:center;justify-content:center;margin:0 auto 7px;overflow:hidden;}
+.a-logo img{width:58px;height:58px;object-fit:contain;}
+.a-logo .fb{font-size:2rem;opacity:0.35;}
+.a-cs{font-family:'Share Tech Mono',monospace;font-size:1.9rem;font-weight:900;color:#fff;letter-spacing:3px;margin-bottom:3px;}
+.a-airline{font-size:12px;color:#cc9988;letter-spacing:1px;margin-bottom:12px;}
+.a-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:11px;margin-bottom:12px;}
+.ag{display:flex;flex-direction:column;gap:2px;}
+.ag-l{font-size:0.5rem;color:#664433;letter-spacing:1.5px;text-transform:uppercase;font-family:'Share Tech Mono',monospace;}
+.ag-v{font-size:0.85rem;color:#ffbbaa;font-weight:700;}
+.ag-v.hi{color:#fff;}
+.a-body{background:rgba(255,35,8,0.1);border:1px solid rgba(255,55,25,0.28);border-radius:9px;padding:11px 14px;font-size:15px;font-weight:700;color:#ffe5dc;line-height:1.85;margin-bottom:14px;}
+.a-body .red{color:#ff5533;font-size:16px;}
+.a-close{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:8px 28px;border-radius:7px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:0.78rem;letter-spacing:2px;transition:all .2s;}
+.a-close:hover{background:rgba(255,255,255,0.13);}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <div class="app-title">🛰 מוניטור <span>נתב"ג</span></div>
+    <div class="app-sub">ADSB.LOL · DEVIATION ALERT · RANGE + HEADING</div>
+  </div>
+  <div class="controls">
+    <button class="btn" id="startBtn" onclick="go()">▶ הפעל</button>
+    <button class="btn stop" id="stopBtn" onclick="halt()" style="display:none">■ עצור</button>
+    <button class="btn" onclick="doFetch()">↻ רענן</button>
+    <label class="btn" style="cursor:pointer" title="טען קובץ JSON מ-OpenSky">
+      📂 טען JSON
+      <input type="file" accept=".json" style="display:none" onchange="loadJsonFile(this)">
+    </label>
+    <div class="sw">רדיוס: <input type="number" id="radiusInput" value="80" min="20" max="200"> ק"מ</div>
+    <div class="sw">סטייה: <input type="number" id="devInput" value="35" min="10" max="90"> °</div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <div class="sp"><div class="dot" id="dot"></div><span id="stxt">ממתין...</span></div>
+  <div class="sp">מטוסים: <em id="cnt">0</em></div>
+  <div class="sp">בגישה: <em id="approachCnt">0</em></div>
+  <div class="sp">סטיות: <em id="alertCnt" style="color:#ff8866">0</em></div>
+  <div class="sp">סריקות: <em id="sc">0</em></div>
+  <div class="sp" id="nxt"></div>
+  <div class="sp" id="clk"></div>
+</div>
+
+<!-- LEFT -->
+<div id="leftPanel">
+  <div class="panel-title">// מטוסים בגישה לנתב"ג</div>
+  <div id="board"></div>
+</div>
+
+<!-- EARTH -->
+<div id="earthWrap">
+  <canvas id="c"></canvas>
+</div>
+
+<!-- RIGHT -->
+<div id="rightPanel">
+  <div class="rp-sec">
+    <div class="rp-title">// מיני-מפה · נתב"ג</div>
+    <canvas id="miniMap" height="150"></canvas>
+  </div>
+  <div class="rp-sec">
+    <div class="rp-title">// תנאי התרעה</div>
+    <div class="lp-cond"><span class="ic">📍</span><span class="lbl">טווח מנתב"ג</span><span class="val">≤ <span id="lpR">80</span>ק"מ</span></div>
+    <div class="lp-cond ac"><span class="ic">🚨</span><span class="lbl">סוטה ממסלול</span><span class="val">&gt; <span id="lpD">35</span>°</span></div>
+    <div style="font-size:0.55rem;color:#2a4466;margin-top:5px;padding:0 4px;">ללא הגבלת גובה — כל מטוס בטווח נבדק</div>
+  </div>
+  <div class="rp-sec">
+    <div class="rp-title">// מטוסים בגישה לאורך זמן</div>
+    <canvas id="histCanvas" height="75"></canvas>
+  </div>
+  <div class="rp-sec" id="logWrap" style="display:none">
+    <div class="rp-title">// יומן סטיות</div>
+    <div id="logList"></div>
+  </div>
+</div>
+
+<div class="err-bar" id="errBar"></div>
+
+<!-- ALERT -->
+<div id="alertOverlay">
+  <div class="alert-box">
+    <div class="siren-row"><div class="siren a"></div><div class="siren b"></div><div class="siren a"></div></div>
+    <div class="a-time-lbl">⏱ שעת ההתרעה</div>
+    <div class="a-time" id="aTime">--:--:--</div>
+    <div class="a-date" id="aDate"></div>
+    <div class="a-dev-badge" id="aDevBadge">סטייה: --°</div>
+    <div class="a-logo" id="aLogo"><span class="fb">✈</span></div>
+    <div class="a-cs" id="aCs">---</div>
+    <div class="a-airline" id="aAirline">---</div>
+    <div class="a-grid">
+      <div class="ag"><div class="ag-l">סוג מטוס</div><div class="ag-v hi" id="aType">-</div></div>
+      <div class="ag"><div class="ag-l">מרחק נתב"ג</div><div class="ag-v hi" id="aDistTlv">-</div></div>
+      <div class="ag"><div class="ag-l">גובה</div><div class="ag-v" id="aAlt">-</div></div>
+      <div class="ag"><div class="ag-l">מהירות</div><div class="ag-v" id="aSpd">-</div></div>
+      <div class="ag"><div class="ag-l">כיוון טיסה</div><div class="ag-v" id="aTrack">-</div></div>
+      <div class="ag"><div class="ag-l">מסלול אידיאלי</div><div class="ag-v" id="aIdeal">-</div></div>
+    </div>
+    <div class="a-body"><span class="red">בדקות הקרובות ישמע הזקה באזורכם.</span><br>אנה היכנסו למרחב מוגן</div>
+    <button class="a-close" onclick="closeAlert()">✕ סגור</button>
+  </div>
+</div>
+
+<script>
+const TLV_LAT=32.0055,TLV_LON=34.8854;
+let running=false,iv=null,cdiv=null,cd=60,sc=0,totalAlerts=0;
+let alertedSet=new Set(),alertLog=[],planes=[],alertActive=false,histData=[];
+// מעקב היסטוריה לכל מטוס
+const planeHistory={}; // cs -> [{dist, devAngle, ts}]
+
+setInterval(()=>{document.getElementById('clk').textContent=new Date().toLocaleTimeString('he-IL');},1000);
+document.getElementById('radiusInput').addEventListener('input',e=>{document.getElementById('lpR').textContent=e.target.value;});
+document.getElementById('devInput').addEventListener('input',e=>{document.getElementById('lpD').textContent=e.target.value;});
+
+function km(la1,lo1,la2,lo2){const R=6371,r=Math.PI/180;const a=Math.sin((la2-la1)*r/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin((lo2-lo1)*r/2)**2;return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));}
+function bearingTo(la1,lo1,la2,lo2){const r=Math.PI/180,dL=(lo2-lo1)*r;const y=Math.sin(dL)*Math.cos(la2*r);const x=Math.cos(la1*r)*Math.sin(la2*r)-Math.sin(la1*r)*Math.cos(la2*r)*Math.cos(dL);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
+function angleDiff(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d;}
+
+// ══ לוגיקה משודרגת: היסטוריה + מגמה + ETA ══
+function updateHistory(cs,dist,devAngle){
+  if(!planeHistory[cs]) planeHistory[cs]=[];
+  planeHistory[cs].push({dist,devAngle,ts:Date.now()});
+  if(planeHistory[cs].length>5) planeHistory[cs].shift();
+  // ניקוי ישן (>10 דקות)
+  Object.keys(planeHistory).forEach(k=>{
+    if(planeHistory[k].length&&Date.now()-planeHistory[k][planeHistory[k].length-1].ts>600000) delete planeHistory[k];
+  });
+}
+
+function getDevTrend(cs){
+  const h=planeHistory[cs];
+  if(!h||h.length<2) return 'unknown'; // אין מספיק נתונים
+  const recent=h[h.length-1].devAngle;
+  const prev=h[h.length-2].devAngle;
+  const diff=recent-prev;
+  if(diff>3) return 'worsening';   // סטייה גדלה — מחמיר
+  if(diff<-3) return 'improving';  // סטייה קטנה — משתפר
+  return 'stable';
+}
+
+function calcETA(dist,speedMs){
+  if(!speedMs||speedMs<50) return null;
+  const speedKmh=speedMs*3.6;
+  const minutes=Math.round((dist/speedKmh)*60);
+  return minutes;
+}
+
+function analyzePlane(p){
+  const maxRadius=parseInt(document.getElementById('radiusInput').value)||80;
+  const maxDev=parseInt(document.getElementById('devInput').value)||35;
+  const lat=p[6]||0,lon=p[5]||0,track=p[10]||0;
+  if(!lat||!lon) return{isApproach:false,isDeviation:false,dist:999,devAngle:180};
+  const dist=km(TLV_LAT,TLV_LON,lat,lon);
+  const idealBearing=bearingTo(lat,lon,TLV_LAT,TLV_LON);
+  const devAngle=angleDiff(track,idealBearing);
+  const inRange=dist<=maxRadius&&!p[8];
+  const approaching=devAngle<90;
+  const isApproach=inRange&&approaching;
+
+  // זיהוי מגמה — התרעה חכמה
+  const cs=(p[1]||'').trim();
+  if(cs&&isApproach) updateHistory(cs,dist,devAngle);
+  const trend=cs?getDevTrend(cs):'unknown';
+
+  // התרעה: סוטה + מגמה לא משתפרת
+  const isDeviation=isApproach&&devAngle>maxDev&&trend!=='improving';
+
+  // ETA — זמן הגעה משוער בדקות
+  const eta=calcETA(dist,p[9]||0);
+
+  // רמת חומרה
+  let severity='low';
+  if(devAngle>maxDev&&trend==='worsening') severity='high';
+  else if(devAngle>maxDev) severity='medium';
+
+  return{isApproach,isDeviation,dist,devAngle:Math.round(devAngle),idealBearing:Math.round(idealBearing),
+    track:Math.round(track),alt:Math.round(p[7]||0),vRate:Math.round(p[11]||0),
+    approaching,trend,eta,severity};
+}
+
+function getPhase(p,an){
+  if(an.isDeviation)return{icon:'🚨',label:'סוטה!',cls:'deviate'};
+  if(an.isApproach)return{icon:'🛬',label:'מתקרב',cls:'approach'};
+  // בטווח אבל יוצא
+  const dist=an.dist;
+  const inRange=dist<=(parseInt(document.getElementById('radiusInput').value)||80);
+  if(inRange&&!p[8])return{icon:'🛫',label:'יוצא',cls:'descend'};
+  if(p[8])return{icon:'🅿',label:'קרקע',cls:'ground'};
+  if((p[11]||0)>2)return{icon:'🛫',label:'עולה',cls:'climb'};
+  if((p[11]||0)<-2)return{icon:'🛬',label:'יורד',cls:'descend'};
+  return{icon:'✈',label:'שיוט',cls:'cruise'};
+}
+
+const AL={'ELY':{n:'אל-על',l:'https://content.airhex.com/content/logos/airlines_ELY_100_100_r.png'},'ISR':{n:'ישראייר',l:'https://content.airhex.com/content/logos/airlines_ISR_100_100_r.png'},'WZZ':{n:'Wizz Air',l:'https://content.airhex.com/content/logos/airlines_WZZ_100_100_r.png'},'RYR':{n:'Ryanair',l:'https://content.airhex.com/content/logos/airlines_RYR_100_100_r.png'},'EZY':{n:'EasyJet',l:'https://content.airhex.com/content/logos/airlines_EZY_100_100_r.png'},'BAW':{n:'British Airways',l:'https://content.airhex.com/content/logos/airlines_BAW_100_100_r.png'},'DLH':{n:'Lufthansa',l:'https://content.airhex.com/content/logos/airlines_DLH_100_100_r.png'},'AFR':{n:'Air France',l:'https://content.airhex.com/content/logos/airlines_AFR_100_100_r.png'},'UAE':{n:'Emirates',l:'https://content.airhex.com/content/logos/airlines_UAE_100_100_r.png'},'ETD':{n:'Etihad',l:'https://content.airhex.com/content/logos/airlines_ETD_100_100_r.png'},'QTR':{n:'Qatar Airways',l:'https://content.airhex.com/content/logos/airlines_QTR_100_100_r.png'},'THY':{n:'Turkish Airlines',l:'https://content.airhex.com/content/logos/airlines_THY_100_100_r.png'},'SWR':{n:'SWISS',l:'https://content.airhex.com/content/logos/airlines_SWR_100_100_r.png'},'KLM':{n:'KLM',l:'https://content.airhex.com/content/logos/airlines_KLM_100_100_r.png'},'IBE':{n:'Iberia',l:'https://content.airhex.com/content/logos/airlines_IBE_100_100_r.png'},'AEE':{n:'Aegean',l:'https://content.airhex.com/content/logos/airlines_AEE_100_100_r.png'},'MSR':{n:'EgyptAir',l:'https://content.airhex.com/content/logos/airlines_MSR_100_100_r.png'},'UAL':{n:'United',l:'https://content.airhex.com/content/logos/airlines_UAL_100_100_r.png'},'DAL':{n:'Delta',l:'https://content.airhex.com/content/logos/airlines_DAL_100_100_r.png'},'AAL':{n:'American Airlines',l:'https://content.airhex.com/content/logos/airlines_AAL_100_100_r.png'},'TOM':{n:'TUI',l:'https://content.airhex.com/content/logos/airlines_TOM_100_100_r.png'},'FDB':{n:'flydubai',l:'https://content.airhex.com/content/logos/airlines_FDB_100_100_r.png'},'SVA':{n:'Saudia',l:'https://content.airhex.com/content/logos/airlines_SVA_100_100_r.png'}};
+function getA(cs){return cs?AL[cs.trim().slice(0,3).toUpperCase()]||null:null;}
+function typeOf(ic){if(!ic)return'לא ידוע';const m={'B738':'Boeing 737-800','B77W':'Boeing 777-300','B772':'Boeing 777-200','B788':'Boeing 787-8','B789':'Boeing 787-9','B744':'Boeing 747-400','A319':'Airbus A319','A320':'Airbus A320','A321':'Airbus A321','A20N':'Airbus A320neo','A21N':'Airbus A321neo','A332':'Airbus A330-200','A333':'Airbus A330-300','A359':'Airbus A350-900','A388':'Airbus A380','E190':'Embraer 190','C172':'Cessna 172'};return m[ic.toUpperCase()]||'מסחרי';}
+function logoImg(a,s){if(a&&a.l)return`<img src="${a.l}" style="width:${s}px;height:${s}px;object-fit:contain" onerror="this.style.display='none'">`;return`<span class="fb">✈</span>`;}
+
+function showAlert(p,an){
+  const cs=(p[1]||'???').trim(),a=getA(cs),now=new Date();
+  document.getElementById('aTime').textContent=now.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  document.getElementById('aDate').textContent=now.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  // badge צבע לפי חומרה
+  const sevColor=an.severity==='high'?'#ff2200':an.severity==='medium'?'#ff8800':'#ffcc00';
+  const trendTxt=an.trend==='worsening'?'📈 מחמיר':an.trend==='improving'?'📉 משתפר':'➡ יציב';
+  document.getElementById('aDevBadge').textContent=`⚠ סטייה: ${an.devAngle}° · ${trendTxt}`;
+  document.getElementById('aDevBadge').style.borderColor=sevColor;
+  document.getElementById('aDevBadge').style.color=sevColor;
+  document.getElementById('aCs').textContent=cs;
+  document.getElementById('aAirline').textContent=a?a.n:(p[2]||'לא ידוע');
+  document.getElementById('aType').textContent=typeOf(p[0]||'');
+  document.getElementById('aDistTlv').textContent=an.dist+' ק"מ'+(an.eta?` · ETA ~${an.eta} דק'`:'');
+  document.getElementById('aAlt').textContent=an.alt.toLocaleString()+' מ\'';
+  document.getElementById('aSpd').textContent=Math.round((p[9]||0)*3.6)+' קמ"ש';
+  document.getElementById('aTrack').textContent=an.track+'°';
+  document.getElementById('aIdeal').textContent=an.idealBearing+'°';
+  document.getElementById('aLogo').innerHTML=logoImg(a,58);
+  document.getElementById('alertOverlay').classList.add('show');
+  alertActive=true;
+  totalAlerts++;document.getElementById('alertCnt').textContent=totalAlerts;
+  const time=now.toLocaleTimeString('he-IL');
+  alertLog.unshift({txt:`${time} · ${cs} · סטייה ${an.devAngle}° · ${an.dist}ק"מ`,dev:true});
+  if(alertLog.length>30)alertLog.pop();
+  document.getElementById('logWrap').style.display='block';
+  document.getElementById('logList').innerHTML=alertLog.map(i=>`<div class="log-item ${i.dev?'dev':''}">${i.txt}</div>`).join('');
+  try{const ac=new AudioContext();[0,0.25,0.5,0.75,1.0].forEach((d,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=i%2===0?980:760;g.gain.setValueAtTime(0.3,ac.currentTime+d);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d+0.22);o.start(ac.currentTime+d);o.stop(ac.currentTime+d+0.25);});}catch(e){}
+}
+function closeAlert(){document.getElementById('alertOverlay').classList.remove('show');alertActive=false;}
+
+function processPlanes(stateArr, isAdsb){
+  if(isAdsb){
+    // פורמט adsb.lol: {hex, flight, lat, lon, alt_baro, gs, track, baro_rate}
+    planes=stateArr.filter(a=>a.lat&&a.lon).map(a=>[
+      a.hex||'',
+      (a.flight||a.r||'').trim(),
+      a.dbFlags||'',
+      null,null,
+      parseFloat(a.lon)||0,
+      parseFloat(a.lat)||0,
+      (parseFloat(a.alt_baro)||parseFloat(a.alt_geom)||0)*0.3048,
+      a.gs<5||a.alt_baro==='ground',
+      (parseFloat(a.gs)||0)*0.514444,
+      parseFloat(a.track)||0,
+      null,
+      (parseFloat(a.baro_rate)||0)*0.00508,
+    ]);
+  } else {
+    // פורמט OpenSky: מערכים
+    planes=stateArr.filter(p=>p[5]&&p[6]);
+  }
+  document.getElementById('errBar').style.display='none';
+  document.getElementById('dot').className='dot on';sc++;
+  document.getElementById('sc').textContent=sc;
+  const airborne=planes.filter(p=>!p[8]);
+  document.getElementById('cnt').textContent=airborne.length;
+  const apCount=airborne.filter(p=>analyzePlane(p).isApproach).length;
+  document.getElementById('approachCnt').textContent=apCount;
+  histData.push({t:new Date(),c:apCount});
+  if(histData.length>30)histData.shift();
+  drawHistory();
+  planes.forEach(p=>{
+    const cs=(p[1]||'').trim();if(!cs||p[8])return;
+    const an=analyzePlane(p);
+    if(an.isDeviation&&!alertedSet.has(cs)){alertedSet.add(cs);showAlert(p,an);setTimeout(()=>alertedSet.delete(cs),6*60*1000);}
+  });
+  renderBoard();drawMiniMap();
+}
+
+function loadJsonFile(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const raw=JSON.parse(e.target.result);
+      // תמיכה בשני פורמטים: OpenSky {states:[]} ו-adsb.lol {ac:[]}
+      const stateArr = raw.states || raw.ac || raw.data || raw.aircraft || null;
+      if(!stateArr){
+        alert('מבנה הקובץ:\n'+JSON.stringify(Object.keys(raw))+'\n\nשלח צילום מסך של זה');
+        return;
+      }
+      processPlanes(stateArr, !!raw.ac);
+      document.getElementById('stxt').textContent=`נטען · ${file.name} · ${new Date().toLocaleTimeString('he-IL')}`;
+    }catch(err){alert('שגיאה בקריאת הקובץ: '+err.message);}
+  };
+  reader.readAsText(file);
+}
+
+async function doFetch(){
+  if(!running)return;
+  document.getElementById('dot').className='dot ld';
+  document.getElementById('stxt').textContent='טוען...';
+
+  // קורא מ-flights.json שה-server.py מוריד אוטומטית
+  let raw=null;
+  try{
+    const res=await fetch('flights.json?t='+Date.now(),{signal:AbortSignal.timeout(8000)});
+    if(res.ok) raw=await res.json();
+  }catch(e){}
+
+  if(!raw){
+    document.getElementById('dot').className='dot';
+    document.getElementById('stxt').textContent='שגיאה';
+    const eb=document.getElementById('errBar');eb.style.display='block';
+    eb.innerHTML='⚠ הרץ <strong style="color:#ffcc44">python server.py</strong> — הוא מוריד את הנתונים אוטומטית';
+    return;
+  }
+
+  const stateArr=raw.states||raw.ac||raw.data||raw.aircraft||(Array.isArray(raw)?raw:null);
+  if(!stateArr||!stateArr.length){
+    // states=null זה תקין — OpenSky מחזיר null כשאין מטוסים בטווח
+    if(raw.states===null||raw.states===undefined){
+      // נרחיב את הטווח אוטומטית
+      document.getElementById('dot').className='dot on';sc++;
+      document.getElementById('sc').textContent=sc;
+      document.getElementById('stxt').textContent=`פעיל · אין מטוסים בטווח · ${new Date().toLocaleTimeString('he-IL')}`;
+      planes=[];
+      renderBoard();drawMiniMap();startCd();
+      return;
+    }
+    document.getElementById('dot').className='dot';
+    document.getElementById('stxt').textContent='אין נתונים';
+    const eb=document.getElementById('errBar');eb.style.display='block';
+    eb.innerHTML=`⚠ OpenSky החזיר: <strong style="color:#ffcc44">${JSON.stringify(Object.keys(raw))}</strong>`;
+    return;
+  }
+  processPlanes(stateArr,!!raw.ac);
+  document.getElementById('stxt').textContent=`פעיל · ${new Date().toLocaleTimeString('he-IL')}`;
+  startCd();
+}
+
+function renderBoard(){
+  const board=document.getElementById('board');
+  const maxDev=parseInt(document.getElementById('devInput').value)||35;
+  const maxRadius=parseInt(document.getElementById('radiusInput').value)||80;
+  const inRangePlanes=planes.filter(p=>!p[8]).map(p=>({p,an:analyzePlane(p)})).filter(({an})=>an.dist<=maxRadius).sort((a,b)=>{if(a.an.isDeviation&&!b.an.isDeviation)return -1;if(!a.an.isDeviation&&b.an.isDeviation)return 1;if(a.an.isApproach&&!b.an.isApproach)return -1;if(!a.an.isApproach&&b.an.isApproach)return 1;return a.an.dist-b.an.dist;});
+  board.innerHTML='';
+  if(!inRangePlanes.length){board.innerHTML='<div style="color:#1a3050;font-size:0.65rem;padding:12px;text-align:center;font-family:monospace;letter-spacing:1px">אין מטוסים בטווח כרגע</div>';return;}
+  inRangePlanes.forEach(({p,an})=>{
+    const cs=(p[1]||'???').trim(),a=getA(cs),ph=getPhase(p,an);
+    const devPct=Math.min(100,Math.round(an.devAngle/90*100));
+    const barColor=an.isDeviation?'#ff5533':an.devAngle>maxDev*0.7?'#ffcc33':'#33ee88';
+    const dirArrow=an.approaching?'↘ מתקרב':'↗ יוצא';
+    const dirColor=an.approaching?'#44dd88':'#ffaa44';
+    const trendIcon=an.trend==='worsening'?'<span style="color:#ff6644;font-size:0.6rem;">📈</span>':an.trend==='improving'?'<span style="color:#44ff88;font-size:0.6rem;">📉</span>':'<span style="color:#aaaaaa;font-size:0.6rem;">➡</span>';
+    const etaTxt=an.eta?`<span class="pls">ETA <em>~${an.eta}דק'</em></span>`:'';
+    const row=document.createElement('div');
+    row.className='pl-row'+(an.isDeviation?' deviate':an.isApproach?' approach':'');
+    row.innerHTML=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="pl-badge ${ph.cls}">${ph.icon} ${ph.label}</span><span class="pl-cs">${cs}</span>${trendIcon}</div><div class="pl-airline">${a?a.n:(p[2]||'לא ידוע')} · ${an.dist}ק"מ מנתב"ג</div><div class="pl-stats"><span class="pls">גובה <em>${an.alt.toLocaleString()}מ'</em></span><span class="pls">מהירות <em>${Math.round((p[9]||0)*3.6)}קמ"ש</em></span>${etaTxt}</div><div class="dev-bar-wrap"><div class="dev-bar-bg"><div class="dev-bar-fill" style="width:${devPct}%;background:${barColor};"></div></div><span class="dev-label" style="color:${barColor};">סטייה ${an.devAngle}°</span></div>`;
+    board.appendChild(row);
+  });
+}
+
+function drawMiniMap(){
+  const mc=document.getElementById('miniMap'),mx=mc.getContext('2d');
+  mc.width=mc.offsetWidth||236;
+  const W=mc.width,H=mc.height;
+  mx.clearRect(0,0,W,H);mx.fillStyle='#060d1a';mx.fillRect(0,0,W,H);
+  mx.strokeStyle='rgba(60,100,200,0.1)';mx.lineWidth=1;
+  for(let i=1;i<3;i++){mx.beginPath();mx.moveTo(i*W/3,0);mx.lineTo(i*W/3,H);mx.stroke();mx.beginPath();mx.moveTo(0,i*H/3);mx.lineTo(W,i*H/3);mx.stroke();}
+  const radius=parseInt(document.getElementById('radiusInput').value)||80;
+  function toXY(lat,lon){return{x:(lon-TLV_LON)/((radius/111)*2)*W+W/2,y:-(lat-TLV_LAT)/((radius/111)*2)*H+H/2};}
+  const cx=W/2,cy=H/2;
+  mx.beginPath();mx.arc(cx,cy,Math.min(W,H)/2-3,0,Math.PI*2);mx.strokeStyle='rgba(60,110,200,0.18)';mx.lineWidth=1;mx.setLineDash([3,5]);mx.stroke();mx.setLineDash([]);
+  mx.beginPath();mx.arc(cx,cy,6,0,Math.PI*2);mx.fillStyle='#33aaff';mx.fill();
+  mx.beginPath();mx.arc(cx,cy,14,0,Math.PI*2);mx.fillStyle='rgba(40,160,255,0.12)';mx.fill();
+  mx.fillStyle='#88ccff';mx.font='bold 8px monospace';mx.textAlign='center';mx.fillText('TLV',cx,cy-17);
+  planes.filter(p=>!p[8]&&p[5]&&p[6]).forEach(p=>{
+    const an=analyzePlane(p);if(!an.isApproach)return;
+    const{x,y}=toXY(p[6],p[5]);if(x<2||x>W-2||y<2||y>H-2)return;
+    const col=an.isDeviation?'#ff5533':'#33ddff';
+    mx.beginPath();mx.arc(x,y,an.isDeviation?5:3,0,Math.PI*2);mx.fillStyle=col;mx.fill();
+    const tr=(p[10]||0)*Math.PI/180;
+    mx.beginPath();mx.moveTo(x,y);mx.lineTo(x+Math.sin(tr)*12,y-Math.cos(tr)*12);mx.strokeStyle=col;mx.lineWidth=1.5;mx.stroke();
+    mx.fillStyle=col;mx.font='7px monospace';mx.textAlign='center';mx.fillText((p[1]||'').trim().slice(0,6),x,y-8);
+  });
+}
+
+function drawHistory(){
+  const hc=document.getElementById('histCanvas'),hx=hc.getContext('2d');
+  hc.width=hc.offsetWidth||236;
+  const W=hc.width,H=hc.height;
+  hx.clearRect(0,0,W,H);hx.fillStyle='#060d1a';hx.fillRect(0,0,W,H);
+  if(histData.length<2){hx.fillStyle='#223344';hx.font='9px monospace';hx.textAlign='center';hx.fillText('ממתין לנתונים...',W/2,H/2+3);return;}
+  const maxC=Math.max(1,...histData.map(d=>d.c));
+  const pad=7,gW=W-pad*2,gH=H-pad*2;
+  hx.strokeStyle='rgba(60,110,200,0.1)';hx.lineWidth=1;
+  for(let i=0;i<=3;i++){const y=pad+gH-i*(gH/3);hx.beginPath();hx.moveTo(pad,y);hx.lineTo(W-pad,y);hx.stroke();}
+  const pts=histData.map((d,i)=>({x:pad+i*(gW/(histData.length-1)),y:pad+gH-Math.round(d.c/maxC*gH)}));
+  hx.beginPath();hx.moveTo(pts[0].x,H-pad);pts.forEach(p=>hx.lineTo(p.x,p.y));hx.lineTo(pts[pts.length-1].x,H-pad);hx.closePath();
+  const gr=hx.createLinearGradient(0,0,0,H);gr.addColorStop(0,'rgba(30,150,255,0.3)');gr.addColorStop(1,'rgba(30,150,255,0.02)');hx.fillStyle=gr;hx.fill();
+  hx.beginPath();hx.moveTo(pts[0].x,pts[0].y);pts.forEach(p=>hx.lineTo(p.x,p.y));hx.strokeStyle='#3399ff';hx.lineWidth=2;hx.stroke();
+  pts.forEach(p=>{hx.beginPath();hx.arc(p.x,p.y,2,0,Math.PI*2);hx.fillStyle='#55bbff';hx.fill();});
+  hx.fillStyle='#aaccee';hx.font='bold 10px monospace';hx.textAlign='right';
+  hx.fillText(histData[histData.length-1].c+' בטווח',W-pad,pad+10);
+}
+
+function startCd(){clearInterval(cdiv);cd=60;cdiv=setInterval(()=>{cd--;document.getElementById('nxt').innerHTML=`עדכון בעוד <em>${cd}s</em>`;if(cd<=0)clearInterval(cdiv);},1000);}
+function go(){running=true;document.getElementById('startBtn').style.display='none';document.getElementById('stopBtn').style.display='inline-block';doFetch();iv=setInterval(doFetch,60000);}
+function halt(){running=false;clearInterval(iv);clearInterval(cdiv);document.getElementById('startBtn').style.display='inline-block';document.getElementById('stopBtn').style.display='none';document.getElementById('dot').className='dot';document.getElementById('nxt').textContent='';document.getElementById('stxt').textContent='עצור';}
+
+// ══ EARTH CANVAS ══
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+function resizeCanvas(){canvas.width=canvas.offsetWidth||800;canvas.height=canvas.offsetHeight||600;}
+resizeCanvas();window.addEventListener('resize',resizeCanvas);
+
+const stars=Array.from({length:350},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.6+0.2,b:Math.random()*0.9+0.2,tw:Math.random()*Math.PI*2}));
+// 12 טילים ב-4 מסלולים
+const rockets=Array.from({length:12},(_,i)=>({
+  orbitR:[195,238,278,315][i%4],
+  angle:(i/12)*Math.PI*2,
+  speed:(0.030+(i%4)*0.010)*(i%2===0?1:-1),
+  trail:[],
+  sparkPhase:Math.random()*Math.PI*2
+}));
+const ER=160;let earthRot=0,pulseR=ER+5,pulse2R=ER+80,globalT=0;
+
+function drawStars(t){
+  const w=canvas.width,h=canvas.height;
+  stars.forEach(s=>{const tw=0.55+0.45*Math.sin(t*0.0007+s.tw);ctx.beginPath();ctx.arc(s.x*w,s.y*h,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${s.b*tw})`;ctx.fill();});
+}
+function drawEarth(ex,ey){
+  const gl=ctx.createRadialGradient(ex-ER*0.3,ey-ER*0.3,ER*0.05,ex,ey,ER);
+  gl.addColorStop(0,'#1a72b8');gl.addColorStop(0.5,'#1a5590');gl.addColorStop(1,'#0a1f44');
+  ctx.beginPath();ctx.arc(ex,ey,ER,0,Math.PI*2);ctx.fillStyle=gl;ctx.fill();
+  const lands=[{ox:-0.18,oy:-0.52,rx:0.36,ry:0.20,rot:0.3},{ox:0.12,oy:-0.28,rx:0.20,ry:0.32,rot:-0.2},{ox:-0.42,oy:-0.08,rx:0.28,ry:0.16,rot:0.1},{ox:-0.08,oy:0.18,rx:0.26,ry:0.20,rot:0.5},{ox:0.32,oy:0.22,rx:0.16,ry:0.26,rot:-0.3},{ox:-0.48,oy:0.28,rx:0.20,ry:0.14,rot:0.4},{ox:0.02,oy:0.46,rx:0.32,ry:0.16,rot:0.1},{ox:-0.22,oy:-0.22,rx:0.10,ry:0.14,rot:0.7}];
+  ctx.save();ctx.beginPath();ctx.arc(ex,ey,ER,0,Math.PI*2);ctx.clip();
+  const sh=Math.sin(earthRot*0.008)*ER*0.03;
+  lands.forEach(l=>{ctx.save();ctx.translate(ex+l.ox*ER+sh,ey+l.oy*ER);ctx.rotate(l.rot+earthRot*0.003);ctx.beginPath();ctx.ellipse(0,0,l.rx*ER,l.ry*ER,0,0,Math.PI*2);ctx.fillStyle='rgba(36,128,55,0.88)';ctx.fill();ctx.restore();});
+  const atm=ctx.createRadialGradient(ex,ey,ER*0.82,ex,ey,ER);atm.addColorStop(0,'rgba(80,170,255,0)');atm.addColorStop(1,'rgba(80,200,255,0.22)');ctx.beginPath();ctx.arc(ex,ey,ER,0,Math.PI*2);ctx.fillStyle=atm;ctx.fill();ctx.restore();
+  const sh2=ctx.createRadialGradient(ex-ER*0.38,ey-ER*0.38,0,ex-ER*0.2,ey-ER*0.2,ER*0.85);sh2.addColorStop(0,'rgba(255,255,255,0.18)');sh2.addColorStop(0.5,'rgba(255,255,255,0.04)');sh2.addColorStop(1,'rgba(0,0,0,0)');ctx.beginPath();ctx.arc(ex,ey,ER,0,Math.PI*2);ctx.fillStyle=sh2;ctx.fill();
+}
+function drawOrbitRings(ex,ey){[195,238,278,315].forEach(r=>{ctx.beginPath();ctx.arc(ex,ey,r,0,Math.PI*2);ctx.strokeStyle='rgba(80,140,255,0.07)';ctx.lineWidth=1;ctx.setLineDash([4,8]);ctx.stroke();ctx.setLineDash([]);});}
+function drawRocket(r,ex,ey){
+  const rx=ex+Math.cos(r.angle)*r.orbitR,ry=ey+Math.sin(r.angle)*r.orbitR;
+  r.trail.push({x:rx,y:ry});if(r.trail.length>35)r.trail.shift();
+
+  // זנב אש — שכבות צבע
+  for(let i=0;i<r.trail.length;i++){
+    const frac=(i+1)/r.trail.length;
+    ctx.beginPath();ctx.arc(r.trail[i].x,r.trail[i].y,6*frac,0,Math.PI*2);
+    if(frac>0.75) ctx.fillStyle=`rgba(255,240,100,${frac*0.65})`;
+    else if(frac>0.4) ctx.fillStyle=`rgba(255,120,20,${frac*0.6})`;
+    else ctx.fillStyle=`rgba(200,30,0,${frac*0.45})`;
+    ctx.fill();
+  }
+
+  // ניצוצות מפוזרים
+  if(r.trail.length>5){
+    r.sparkPhase+=0.3;
+    for(let s=0;s<6;s++){
+      const idx=Math.floor(r.trail.length*0.6+Math.random()*r.trail.length*0.4);
+      const tp=r.trail[Math.min(idx,r.trail.length-1)];
+      const sx=tp.x+(Math.random()-0.5)*24;
+      const sy=tp.y+(Math.random()-0.5)*24;
+      ctx.beginPath();ctx.arc(sx,sy,Math.random()*2.8+0.4,0,Math.PI*2);
+      const g=Math.floor(Math.random()*180+60);
+      ctx.fillStyle=`rgba(255,${g},0,${Math.random()*0.85+0.15})`;ctx.fill();
+    }
+  }
+
+  const dir=r.speed>0?r.angle+Math.PI/2:r.angle-Math.PI/2;
+  ctx.save();ctx.translate(rx,ry);ctx.rotate(dir+Math.PI/2);
+
+  // כנפיים (fins) תחתונות
+  ctx.beginPath();ctx.moveTo(-8,10);ctx.lineTo(-16,22);ctx.lineTo(-6,14);ctx.closePath();
+  ctx.fillStyle='#cc3300';ctx.fill();
+  ctx.beginPath();ctx.moveTo(8,10);ctx.lineTo(16,22);ctx.lineTo(6,14);ctx.closePath();
+  ctx.fillStyle='#cc3300';ctx.fill();
+
+  // גוף ראשי — gradient לבן/אפור
+  const bodyGrad=ctx.createLinearGradient(-9,0,9,0);
+  bodyGrad.addColorStop(0,'#aaccee');bodyGrad.addColorStop(0.3,'#ffffff');bodyGrad.addColorStop(0.7,'#ddeeff');bodyGrad.addColorStop(1,'#8899aa');
+  ctx.beginPath();ctx.moveTo(0,-22);ctx.lineTo(-9,12);ctx.lineTo(9,12);ctx.closePath();
+  ctx.fillStyle=bodyGrad;ctx.fill();
+
+  // פס אדום באמצע הגוף
+  ctx.beginPath();ctx.rect(-9,2,18,6);ctx.fillStyle='#ff2200';ctx.fill();
+
+  // חרוט תחתון
+  ctx.beginPath();ctx.moveTo(-9,12);ctx.lineTo(-7,20);ctx.lineTo(0,18);ctx.lineTo(7,20);ctx.lineTo(9,12);
+  ctx.fillStyle='#882200';ctx.fill();
+
+  // חלון/חיישן קטן
+  ctx.beginPath();ctx.arc(0,-10,3.5,0,Math.PI*2);
+  ctx.fillStyle='#001133';ctx.fill();
+  ctx.beginPath();ctx.arc(-0.8,-10.8,1.2,0,Math.PI*2);
+  ctx.fillStyle='rgba(100,200,255,0.8)';ctx.fill();
+
+  // להבה ראשית
+  const flicker=0.8+Math.sin(globalT*0.3+r.sparkPhase)*0.25;
+  const fl=ctx.createRadialGradient(0,20,0,0,32*flicker,16*flicker);
+  fl.addColorStop(0,'rgba(255,255,200,1)');
+  fl.addColorStop(0.25,'rgba(255,200,50,0.95)');
+  fl.addColorStop(0.55,'rgba(255,80,0,0.7)');
+  fl.addColorStop(1,'rgba(255,0,0,0)');
+  ctx.beginPath();ctx.ellipse(0,20,10,16*flicker,0,0,Math.PI*2);
+  ctx.fillStyle=fl;ctx.fill();
+
+  // ניצוץ מרכזי בוהק
+  ctx.beginPath();ctx.arc(0,18,3,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.95)';ctx.fill();
+
+  ctx.restore();
+}
+
+function drawPulses(ex,ey){
+  if(!alertActive)return;
+  pulseR+=3;pulse2R+=3;
+  if(pulseR>250)pulseR=ER+5;if(pulse2R>250)pulse2R=ER+5;
+  [pulseR,pulse2R].forEach(pr=>{if(pr<=ER)return;const alpha=1-(pr-ER-5)/245;ctx.beginPath();ctx.arc(ex,ey,pr,0,Math.PI*2);ctx.strokeStyle=`rgba(255,60,20,${alpha*0.7})`;ctx.lineWidth=2.5;ctx.stroke();});
+}
+function frame(t){
+  globalT++;
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#03050f';ctx.fillRect(0,0,w,h);
+  drawStars(t);
+  const ex=w/2,ey=h/2;
+  drawOrbitRings(ex,ey);drawPulses(ex,ey);drawEarth(ex,ey);
+  rockets.forEach(r=>{r.angle+=r.speed*0.016;drawRocket(r,ex,ey);});
+  earthRot+=0.2;requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
